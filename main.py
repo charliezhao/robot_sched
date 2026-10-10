@@ -51,7 +51,7 @@ class FleetEngine:
         for j in uncompleted_jobs:
             self.scheduler.add_job(j)
 
-    def submit_jobs(self, jobs: List[Job]):
+    def submit_jobs_old(self, jobs: List[Job]):
         clean = []
         for j in jobs:
             if j.preflight_unsafe:
@@ -61,6 +61,15 @@ class FleetEngine:
                 clean.append(j)
                 self.scheduler.add_job(j)
         self.storage.insert_jobs(clean)
+
+    def submit_jobs(self, jobs: List[Job]):
+        for j in jobs:
+            if j.preflight_unsafe:
+                j.status = JobStatus.REFUSED_UNSAFE
+                print(f"[{time.strftime('%X')}] 🚫 PREFLIGHT REFUSAL: Job {j.job_id} flagged unsafe. Skipped.")
+            else:
+                self.scheduler.add_job(j)
+        self.storage.insert_jobs(jobs)  # Insert ALL jobs so the audit ledger is 100% complete        
 
     async def station_worker(self, station_id: str):
         st = self.stations[station_id]
