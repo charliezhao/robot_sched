@@ -6,6 +6,11 @@ Phase 3: Interactive Fleet Dashboard & Comparative Benchmark
 - Side-by-side Comparative Engine: State-Graph vs. Strict Linear Chains
 """
 
+import select
+import sys
+import termios
+import time
+import tty
 import asyncio
 import copy
 import hashlib
@@ -61,6 +66,21 @@ class FleetMetrics:
     eval_batch_progress: Dict[str, Tuple[int, int]] = field(default_factory=dict)  # batch_id -> (done, total)
 
 
+class NonBlockingInput:
+    def __enter__(self):
+        self.old_settings = termios.tcgetattr(sys.stdin)
+        tty.setcbreak(sys.stdin.fileno())
+        return self
+
+    def __exit__(self, type, value, traceback):
+        termios.tcsetattr(sys.stdin, termios.TCSADRAIN, self.old_settings)
+
+    def get_key(self) -> Optional[str]:
+        dr, _, _ = select.select([sys.stdin], [], [], 0)
+        if dr:
+            return sys.stdin.read(1)
+        return None
+
 # ---------------------------------------------------------------------------
 # Engine Supporting Real-Time Interventions & Scheduling Modes
 # ---------------------------------------------------------------------------
@@ -94,6 +114,12 @@ class OperableFleetEngine:
         self.metrics = FleetMetrics()
         self.running = True
         self.start_sim_time = 0.0
+        self.last_action_msg: str = "Ready. Press [P] to pause, [0-9] to select station."
+        self.selected_station_id: str = "st_00"
+
+        self.fleet_pause_event = asyncio.Event()
+        self.fleet_pause_event.set()
+        self.is_fleet_paused = False        
 
         for i in range(num_stations):
             sid = f"st_{i:02d}"
@@ -105,11 +131,18 @@ class OperableFleetEngine:
             )
 
     async def sim_sleep(self, seconds: float):
+        await self.fleet_pause_event.wait()
         self.metrics.simulated_elapsed_seconds += seconds / self.num_stations
         if self.sim_speed >= 1000.0:
-            await asyncio.sleep(0)  # Pure cooperative yield, instant execution
+            await asyncio.sleep(0)
         else:
-            await asyncio.sleep(seconds / self.sim_speed)
+            chunk = 0.05
+            elapsed = 0.0
+            total_wall_time = seconds / self.sim_speed
+            while elapsed < total_wall_time:
+                await self.fleet_pause_event.wait()
+                await asyncio.sleep(chunk)
+                elapsed += chunk            
 
     def submit_jobs(self, jobs: List[Job]):
         for j in jobs:
@@ -320,6 +353,13 @@ class OperableFleetEngine:
                             st.status = StationStatus.AWAITING_OPERATOR
                         st.current_job = None
 
+    def pause_fleet(self):
+        self.is_fleet_paused = True
+        self.fleet_pause_event.clear()
+
+    def resume_fleet(self):
+        self.is_fleet_paused = False
+        self.fleet_pause_event.set()
 
 # ---------------------------------------------------------------------------
 # UI Dashboard Render Logic (Rich TUI)
@@ -418,9 +458,9 @@ def build_dashboard_view(engine: OperableFleetEngine) -> Layout:
 
     # 4. Interactive Control Strip
     footer_text = Text()
-    footer_text.append("INTERACTIVE OPERATOR KEYBOARD HOTKEYS:\n", style="bold yellow")
-    footer_text.append("[P] Pause st_00   [R] Resume st_00   [A] Abort st_00   [K] Requeue st_00   [O] Mark Restored st_00   [Q] Quit")
-    layout["footer"].update(Panel(footer_text, border_style="yellow"))
+    footer_text.append(f"TARGET STATION: [{engine.selected_station_id}]  |  LAST ACTION: {engine.last_action_msg}\n", style="bold cyan")
+    footer_text.append("HOTKEYS: [0-9] Select Station | [P] Pause Fleet | [R] Resume Fleet | [A] Abort Move | [K] Requeue Job | [O] Mark Restored (S0) | [Q] Quit", style="bold white")
+    layout["footer"].update(Panel(footer_text, border_style="yellow"))    
 
     return layout
 
@@ -516,47 +556,61 @@ async def run_headless_simulation(mode: str, seed: int = 42) -> FleetMetrics:
     return engine.metrics
 
 
-async def run_interactive_dashboard_old():
-    engine = OperableFleetEngine(mode="STATE_GRAPH", seed=42, sim_speed=40.0)
-    engine.submit_jobs(make_benchmark_workload())
-
-    workers = [asyncio.create_task(engine.station_worker(sid)) for sid in engine.stations.keys()]
-
-    with Live(build_dashboard_view(engine), refresh_per_second=4, console=console) as live:
-        for _ in range(60):  # Run live view for 60 ticks (~15 seconds wall-clock)
-            live.update(build_dashboard_view(engine))
-            await asyncio.sleep(0.25)
-
-    engine.running = False
-    for w in workers:
-        w.cancel()
-
 async def run_interactive_dashboard():
-    # sim_speed=6.0 means a 31s robot move takes ~5.1s wall-clock time
-    # An operator 30s reset takes 5.0s wall-clock time
     engine = OperableFleetEngine(mode="STATE_GRAPH", seed=42, sim_speed=6.0)
     engine.submit_jobs(make_benchmark_workload())
 
     workers = [asyncio.create_task(engine.station_worker(sid)) for sid in engine.stations.keys()]
 
     console.clear()
-    with Live(build_dashboard_view(engine), refresh_per_second=5, console=console) as live:
-        try:
-            # Keeps running until all jobs are either COMPLETED, FAILED, or REFUSED
-            while engine.metrics.queued > 0 or engine.metrics.in_flight > 0:
+    with NonBlockingInput() as key_reader:
+        with Live(build_dashboard_view(engine), refresh_per_second=5, console=console) as live:
+            try:
+                while engine.metrics.queued > 0 or engine.metrics.in_flight > 0:
+                    ch = key_reader.get_key()
+                    if ch:
+                        # Station selection: '0' through '9'
+                        if ch.isdigit():
+                            idx = int(ch)
+                            engine.selected_station_id = f"st_{idx:02d}"
+                            engine.last_action_msg = f"Targeted {engine.selected_station_id}"
+
+                        # Fleet-wide Pause & Resume
+                        elif ch in ('p', 'P'):
+                            engine.pause_fleet()
+                            engine.last_action_msg = "Fleet PAUSED."
+                        elif ch in ('r', 'R'):
+                            engine.resume_fleet()
+                            engine.last_action_msg = "Fleet RESUMED."
+
+                        # Station-specific Interventions on selected_station_id
+                        elif ch in ('a', 'A'):
+                            msg = await engine.apply_operator_intervention(engine.selected_station_id, InterventionType.ABORT)
+                            engine.last_action_msg = msg
+                        elif ch in ('k', 'K'):
+                            msg = await engine.apply_operator_intervention(engine.selected_station_id, InterventionType.REQUEUE)
+                            engine.last_action_msg = msg
+                        elif ch in ('o', 'O'):
+                            msg = await engine.apply_operator_intervention(engine.selected_station_id, InterventionType.MARK_RESTORED)
+                            engine.last_action_msg = msg
+
+                        # Quit
+                        elif ch in ('q', 'Q'):
+                            break
+
+                    live.update(build_dashboard_view(engine))
+                    await asyncio.sleep(0.15)
+
                 live.update(build_dashboard_view(engine))
-                await asyncio.sleep(0.2)
-            
-            # Final refresh once everything settles
-            live.update(build_dashboard_view(engine))
-            await asyncio.sleep(3.0)
-        except (asyncio.CancelledError, KeyboardInterrupt):
-            pass
+                await asyncio.sleep(2.0)
+            except (asyncio.CancelledError, KeyboardInterrupt):
+                pass
 
     engine.running = False
+    engine.resume_fleet()
     for w in workers:
         w.cancel()
-        
+
 def print_comparison_table(metrics_graph: FleetMetrics, metrics_strict: FleetMetrics):
     console.print("\n" + "=" * 78, style="bold green")
     console.print("⚖️  HEAD-TO-HEAD COMPARATIVE RESULTS (SAME WORKLOAD & SEED)", style="bold cyan")
