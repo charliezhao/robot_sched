@@ -1,5 +1,12 @@
 # robot_sched
 
+How to run it:
+python main.py --demonstrate-resume
+
+Run test:
+pytest -v
+
+
 Take-Home: A Queue for Robots That Get Stuck
 In one sentence: build the queue and scheduler that drives tens of thousands of jobs across ten robot stations, where a station holds physical state, work assumes the table is in a particular arrangement, and a failure can need a human before anything else runs there.
 
