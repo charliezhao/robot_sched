@@ -133,12 +133,14 @@ class FleetEngine:
             self.scheduler.available_gpu_slots += 1
 
         if succeeded:
+            self.scheduler.register_station_feedback(st.station_id, failed=False)
             st.drift_counter += 1
             st.table_state = job.target_state_hash
             st.status = StationStatus.CALIBRATING if st.drift_counter >= CALIBRATION_INTERVAL_K else StationStatus.IDLE
             self.storage.mark_job_success(job.job_id, st.station_id, st.table_state, st.drift_counter)
             print(f"[{time.strftime('%X')}] ✅ Station {st.station_id} SUCCESS {job.job_id} -> {st.table_state} (drift={st.drift_counter})")
         else:
+            self.scheduler.register_station_feedback(st.station_id, failed=True)
             can_retry = job.attempt_count < job.retry_limit
             st.status = StationStatus.AWAITING_OPERATOR
             st.table_state = "DIRTY"
@@ -179,9 +181,16 @@ def generate_sample_workload() -> List[Job]:
             jid = f"replay_c{c}_m{m}"
             key = hashlib.sha256(f"{jid}:{curr}:{target}".encode()).hexdigest()
             jobs.append(Job(
-                job_id=jid, idempotency_key=key, work_type=WorkType.REPLAY, batch_id=None,
-                required_state_hash=curr, target_state_hash=target, max_duration_sec=REPLAY_DURATION_S,
-                preflight_unsafe=False, retry_limit=2
+                job_id=jid,
+                idempotency_key=key,
+                work_type=WorkType.REPLAY,
+                batch_id=None,
+                required_state_hash=curr,
+                target_state_hash=target,
+                max_duration_sec=REPLAY_DURATION_S,
+                preflight_unsafe=False,
+                retry_limit=2,
+                chain_depth=m  # 0 for root move from S0, 1..3 for downstream
             ))
             curr = target
 

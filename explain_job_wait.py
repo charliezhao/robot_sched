@@ -44,9 +44,13 @@ def explain_job(job_id: str):
         v = r["decision_verdict"]
         reasons_summary[v] = reasons_summary.get(v, 0) + 1
 
-    console.print("[bold underline]Rejection Category Breakdown:[/]")
+    console.print("[bold underline]Decision Verdict Breakdown:[/]")
     for r_type, count in reasons_summary.items():
-        console.print(f"  • [bold red]{r_type:<25}[/]: bypassed {count} times")
+        if r_type == "DISPATCHED":
+            console.print(f"  • [bold green]{r_type:<28}[/]: {count} time(s)")
+        else:
+            console.print(f"  • [bold red]{r_type:<28}[/]: bypassed {count} time(s)")
+
 
     # Show chronological timeline sample
     t = Table(title="\nDetailed Decision Traversal Sample (First 15 Evaluation Cycles)", expand=True)

@@ -36,6 +36,7 @@ class Job:
     preflight_unsafe: bool
     retry_limit: int
     attempt_count: int = 0
+    chain_depth: int = 0  # 0 = root move from S0, 1 = move 1, 2 = move 2, etc.
     status: JobStatus = JobStatus.QUEUED
     assigned_station_id: Optional[str] = None
 

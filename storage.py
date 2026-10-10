@@ -28,6 +28,7 @@ class Storage:
                     preflight_unsafe INTEGER NOT NULL,
                     retry_limit INTEGER NOT NULL,
                     attempt_count INTEGER DEFAULT 0,
+                    chain_depth INTEGER DEFAULT 0,
                     status TEXT NOT NULL,
                     assigned_station_id TEXT,
                     updated_at REAL NOT NULL
@@ -111,13 +112,13 @@ class Storage:
                 self.conn.execute("""
                     INSERT OR IGNORE INTO jobs 
                     (job_id, idempotency_key, work_type, batch_id, required_state_hash, target_state_hash,
-                     max_duration_sec, preflight_unsafe, retry_limit, attempt_count, status, assigned_station_id, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     max_duration_sec, preflight_unsafe, retry_limit, attempt_count, chain_depth, status, assigned_station_id, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     j.job_id, j.idempotency_key, j.work_type.value, j.batch_id,
                     j.required_state_hash, j.target_state_hash, j.max_duration_sec,
                     1 if j.preflight_unsafe else 0, j.retry_limit, j.attempt_count,
-                    j.status.value, j.assigned_station_id, time.time()
+                    j.chain_depth, j.status.value, j.assigned_station_id, time.time()
                 ))
 
     def record_preflight_refusal(self, job_id: str):
@@ -173,10 +174,18 @@ class Storage:
             stations = {row["station_id"]: dict(row) for row in self.conn.execute("SELECT * FROM stations")}
             jobs = [
                 Job(
-                    job_id=r["job_id"], idempotency_key=r["idempotency_key"], work_type=WorkType(r["work_type"]),
-                    batch_id=r["batch_id"], required_state_hash=r["required_state_hash"], target_state_hash=r["target_state_hash"],
-                    max_duration_sec=r["max_duration_sec"], preflight_unsafe=bool(r["preflight_unsafe"]),
-                    retry_limit=r["retry_limit"], attempt_count=r["attempt_count"], status=JobStatus(r["status"])
+                    job_id=r["job_id"], 
+                    idempotency_key=r["idempotency_key"], 
+                    work_type=WorkType(r["work_type"]),
+                    batch_id=r["batch_id"], 
+                    required_state_hash=r["required_state_hash"], 
+                    target_state_hash=r["target_state_hash"],
+                    max_duration_sec=r["max_duration_sec"], 
+                    preflight_unsafe=bool(r["preflight_unsafe"]),
+                    retry_limit=r["retry_limit"], 
+                    attempt_count=r["attempt_count"], 
+                    chain_depth=r["chain_depth"] if "chain_depth" in r.keys() else 0,
+                    status=JobStatus(r["status"])
                 )
                 for r in self.conn.execute("SELECT * FROM jobs WHERE status = 'QUEUED'")
             ]
