@@ -43,6 +43,55 @@ class Storage:
                     updated_at REAL NOT NULL
                 );
             """)
+            self.conn.execute("""
+                CREATE TABLE IF NOT EXISTS decision_audit_ledger (
+                    decision_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    sim_time REAL NOT NULL,
+                    station_id TEXT NOT NULL,
+                    candidate_job_id TEXT NOT NULL,
+                    candidate_work_type TEXT NOT NULL,
+                    station_table_state TEXT NOT NULL,
+                    job_required_state TEXT NOT NULL,
+                    available_gpus INTEGER NOT NULL,
+                    decision_verdict TEXT NOT NULL,
+                    rejection_reason TEXT,
+                    created_at REAL NOT NULL
+                );
+            """)
+
+    def record_decision_trace(
+        self,
+        sim_time: float,
+        station_id: str,
+        job_id: str,
+        work_type: str,
+        st_state: str,
+        req_state: str,
+        avail_gpus: int,
+        verdict: str,
+        reason: str = ""
+    ):
+        with self.conn:
+            self.conn.execute("""
+                INSERT INTO decision_audit_ledger 
+                (sim_time, station_id, candidate_job_id, candidate_work_type, station_table_state,
+                 job_required_state, available_gpus, decision_verdict, rejection_reason, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (sim_time, station_id, job_id, work_type, st_state, req_state, avail_gpus, verdict, reason, time.time()))
+
+    def record_decision_traces_batch(self, traces: list):
+        now = time.time()
+        rows = [
+            (t[0], t[1], t[2], t[3], t[4], t[5], t[6], t[7], t[8], now)
+            for t in traces
+        ]
+        with self.conn:
+            self.conn.executemany("""
+                INSERT INTO decision_audit_ledger 
+                (sim_time, station_id, candidate_job_id, candidate_work_type, station_table_state,
+                 job_required_state, available_gpus, decision_verdict, rejection_reason, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, rows)
 
     def init_stations_if_empty(self, num_stations: int):
         with self.conn:

@@ -87,7 +87,7 @@ class FleetEngine:
                 continue
 
             if st.status == StationStatus.IDLE:
-                job = self.scheduler.select_next_job(st)
+                job = self.scheduler.select_next_job(st, storage=self.storage, sim_time=time.time())
                 if job is None:
                     has_match = any(j.required_state_hash == st.table_state for j in self.scheduler.queued_jobs.values())
                     if not has_match and len(self.scheduler.queued_jobs) > 0 and st.table_state != CANONICAL_STATE:
