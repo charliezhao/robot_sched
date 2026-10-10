@@ -250,3 +250,32 @@ State transitions are committed to SQLite with Write-Ahead Logging (`PRAGMA jour
 3. **No Distributed Microservices:** Runs as an in-process asynchronous engine backed by embedded SQLite WAL to prevent distributed consensus edge cases.
 4. **No Continuous 6-DoF Computer Vision:** Table state is verified using discrete hash matching with simulated vision noise.
 5. **No Dynamic Motion Planning / Inverse Kinematics:** Joint paths are pre-recorded or policy-generated black boxes.
+
+
+## 10. Make it watchable, and make it operable
+
+Here is the complete implementation for Phase 3: Make it watchable, and make it operable.This delivers:Live Interactive Dashboard (Rich / Textual TUI): Fleet-wide view showing all 10 stations, operator queue, GPU slot utilization, eval completion thresholds, failure/refusal telemetry breakdown, and dynamic projected finish times.Interactive Station Panel & Safety Interventions: Interactive operator controls (pause, abort, requeue, table_restored, take_offline).Mid-Decision Concurrency Safety: Explicit transactional fencing via lock hierarchy and optimistic SQLite versioning ensuring operator interventions never race with scheduler dispatch.Fast Clock Simulation: Runs at customizable acceleration ($50\times$ to $200\times$) so multi-day runs finish in minutes.Head-to-Head Comparative Benchmark: Runs the identical workload and PRNG seed across State-Graph Dispatch vs. Strict Sequential Chains, outputting operator labor hours, idle starvation, and total wall clock.Part 1: What Makes Human Intervention Mid-Decision Safe?When an operator reaches in to pause a station or mark a table restored while the scheduler loop is actively deciding, two race conditions emerge:The Phantom Dispatch Race: The scheduler inspects Station 3 as IDLE, selects a candidate job, but before it dispatches, the operator clicks "Take Offline" or "Pause". If the scheduler proceeds blindly, the arm commands a paused/servicing station.The Stale State Race: The scheduler reads table_state = STATE_CANONICAL_S0 and begins acquiring GPU/operator locks, but the operator bumps the table or clicks "Mark Dirty".
+
+### The Safety Guarantees Implemented in Code:  
+```
+        OPERATOR ACTION THREAD / UI                SCHEDULER DISPATCH LOOP
+               │                                         │
+               │ (1) Acquire station_mutex[sid]          │
+               ├────────────────────────────────────────►│ Blocked waiting for lock
+               │                                         │
+               │ (2) Atomic DB Transition:               │
+               │     SET status = 'PAUSED',              │
+               │     version = version + 1               │
+               │                                         │
+               │ (3) Release station_mutex[sid]          │
+               │                                         │
+               │                                         ▼
+               │                            Acquires station_mutex[sid]
+               │                            Validates Pre-Condition:
+               │                            if station.status != IDLE:
+               │                                Abort dispatch cycle!
+
+```
+1.**Two-Phase Optimistic State Verification: Before dispatching an arm command, the scheduler validates that station.status == IDLE under an atomic lock. If an operator intervened mid-decision, the dispatch cycle immediately aborts with zero side effects.
+2.**Transactional Fencing in SQLite: Every status update checks row versioning (WHERE station_id = ? AND status = 'IDLE'). If an operator intervention updated the row concurrently, the scheduler's write fails with 0 rows affected.
+3.**Idempotent Abort / Requeue: Aborting mid-move cuts arm commands instantly, immediately marks the table state DIRTY, releases any allocated GPU slots, and routes the aborted job back to QUEUED (incrementing attempt_count).
