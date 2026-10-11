@@ -14,6 +14,36 @@ An asynchronous, crash-resilient scheduling engine managing four heterogeneous r
 
 ---
 
+## Key Features Added
+
+### 1. State-Preservation & Priority Dispatch
+* **$O(1)$ Partitioned Dispatch Hierarchy**:
+  1. **Exact-State Replay Continuation**: Prioritizes queued moves matching the current non-canonical physical grid state (`STATE_GRID_C*_M*`), preventing wildcards from destroying expensive multi-step progress.
+  2. **EVAL Gang Batches**: Dispatches batch evaluation episodes when GPU resources are available.
+  3. **Policy Workloads**: Dispatches closed-loop policy runs subject to station reliability bounds.
+  4. **Root Replay Trajectories**: Launches Move 0 trajectories from canonical ground truth (`STATE_CANONICAL_S0`).
+* **Wildcard (`"ANY"`) Guardrails**: Prevents closed-loop eval/policy runs from wiping intermediate table states unless no exact continuation exists.
+
+### 2. Empirical Reliability & Drift Routing
+* **Online Failure Probability Tracking ($P_{\text{fail}}$)**: Dynamically estimates station reliability with cumulative kinematic drift penalties:
+  $$P_{\text{fail}} = \frac{\text{failures}}{\text{failures} + \text{successes}} + (0.03 \times \text{drift})$$
+* **Chain-Depth Risk Gating**: Deep-chain trajectory moves ($m \ge 2$) require strictly lower $P_{\text{fail}}$ stations, preventing brittle stations from aborting downstream multi-step sequences.
+* **Autonomous Recalibration**: Automatically triggers zeroing and clears kinematic drift when stations reach critical operational thresholds ($K \ge 4$).
+
+### 3. Physical State & Fault Convergence Model
+* **5 Station Lifecycle States**: `IDLE`, `BUSY`, `AWAITING_OPERATOR`, `OPERATOR_RESETTING`, `CALIBRATING`.
+* **26 Physical Table States**:
+  * 1 Canonical Datum (`STATE_CANONICAL_S0`).
+  * 24 Intermediate Replay Grids ($6\text{ chains } \times 4\text{ moves}$).
+  * 1 Physical Fault state (`DIRTY`).
+* **Operator Labor Queue (`asyncio.Semaphore(2)`)**: Realistically simulates labor constraints where 10 automated stations share 2 human technicians for jig-based surface resets back to $S_0$.
+
+### 4. Forensic Decision Ledger & Explainability CLI
+* **`decision_audit_ledger`**: Every candidate traversal cycle logs exact audit metadata (timestamp, station state, target state, free GPUs, verdict, and forensic reasoning) to SQLite WAL.
+* **`explain_job_wait.py` CLI**:
+  ```bash
+  python explain_job_wait.py <job_id>
+
 ## Architecture Overview
 
 ```text
