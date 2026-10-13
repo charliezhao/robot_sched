@@ -77,7 +77,7 @@ $$\bar{R} = \frac{\bar{p}_{\text{fail}}}{1 - \bar{p}_{\text{fail}}}$$
 
 Thus, the maximum possible system throughput bounded by operator availability is:
 
-$$\mu_{\text{op\_bound}} = \frac{\mu_{\text{resets}}}{\bar{R}} = \frac{N_{\text{operators}} \cdot (1 - \bar{p}_{\text{fail}})}{T_{\text{reset}} \cdot \bar{p}_{\text{fail}}} \quad [\text{completed units / second}]$$
+$$\mu_{\text{op\\_bound}} = \frac{\mu_{\text{resets}}}{\bar{R}} = \frac{N_{\text{operators}} \cdot (1 - \bar{p}_{\text{fail}})}{T_{\text{reset}} \cdot \bar{p}_{\text{fail}}} \quad [\text{completed units / second}]$$
 
 ---
 
