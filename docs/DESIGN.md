@@ -205,7 +205,7 @@ Every field maps directly to an explicit decision branch in the scheduler:
 Incoming jobs compute a deterministic payload hash:
 
 $$
-\text{idempotency\_key} = \text{SHA256}(\text{work\_type} + \text{batch\_id} + \text{required\_state} + \text{target\_state} + \text{trajectory\_id})
+\text{idempotency\\_key} = \text{SHA256}(\text{work\\_type} + \text{batch\\_id} + \text{required\\_state} + \text{target\\_state} + \text{trajectory\\_id})
 $$
 
 Duplicate submissions return existing job state without re-queueing or re-running physical moves.
