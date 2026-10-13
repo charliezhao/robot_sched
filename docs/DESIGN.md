@@ -100,7 +100,7 @@ Moves are chained: $M_1 \to M_2 \dots \to M_6$. If $M_3$ fails, downstream moves
 A move is modeled as a directed edge on a grid configuration multigraph:
 
 $$
-e = (S_{\text{from}}, \text{trajectory\_id}, S_{\text{to}})
+e = (S_{\text{from}}, \text{trajectory\\_id}, S_{\text{to}})
 $$
 
 * **Advantage:** When a station reaches verified arrangement $S_k$, the scheduler looks up any job in the entire pool requiring $S_k$, regardless of which demonstration generated it.
