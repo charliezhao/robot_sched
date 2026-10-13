@@ -85,10 +85,10 @@ $$\mu_{\text{op\\_bound}} = \frac{\mu_{\text{resets}}}{\bar{R}} = \frac{N_{\text
 
 The honest completion rate $\mu_{\text{effective}}$ is constrained by the tighter of machine availability and human capacity:
 
-$$\mu_{\text{effective}} = \min\left( \mu_{\text{fleet}}, \;\; \mu_{\text{op\_bound}} \right)$$
+$$\mu_{\text{effective}} = \min\left( \mu_{\text{fleet}}, \;\; \mu_{\text{op\\_bound}} \right)$$
 
 For $N_{\text{remaining}}$ uncompleted units in the queue:
 
 $$\text{ETA}_{\text{honest}} = \frac{N_{\text{remaining}}}{\mu_{\text{effective}}}$$
 
-Additionally, if $\mu_{\text{op\_bound}} < \mu_{\text{fleet}}$, the system flags `is_operator_bottleneck = True`, alerting operations that adding stations will yield zero throughput improvement without adding human operators.
+Additionally, if $\mu_{\text{op\\_bound}} < \mu_{\text{fleet}}$, the system flags `is_operator_bottleneck = True`, alerting operations that adding stations will yield zero throughput improvement without adding human operators.
