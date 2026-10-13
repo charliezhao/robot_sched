@@ -98,7 +98,9 @@ Moves are chained: $M_1 \to M_2 \dots \to M_6$. If $M_3$ fails, downstream moves
 
 ### Model B: State-Graph Dispatch (Adopted)
 A move is modeled as a directed edge on a grid configuration multigraph:
-$$e = (S_{\text{from}}, \text{trajectory\_id}, S_{\text{to}})$$
+$$
+e = (S_{\text{from}}, \text{trajectory\_id}, S_{\text{to}})
+$$
 * **Advantage:** When a station reaches verified arrangement $S_k$, the scheduler looks up any job in the entire pool requiring $S_k$, regardless of which demonstration generated it.
 * **Failure isolation:** A failure at move 3 on Station 1 only marks Station 1 dirty; it does not block candidate moves needing $S_3$ from running on Station 2 if Station 2 happens to be in state $S_3$.
 * **Verification cost:** Open-loop moves accumulate spatial variance. To avoid blind cascades, an overhead static camera runs a sub-second ($~200\text{ ms}$) bounding-box/AprilTag occupancy verification upon move completion. If the check passes, the table transitions to $S_{\text{to}}$.
